@@ -1,0 +1,101 @@
+
+
+services:
+  # 1. Relational Storage Ledger
+  postgres_db:
+    image: postgres:15-alpine
+    container_name: engine_postgres_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${HOST_PORT_POSTGRES}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres_init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - agent_engine_network
+
+  # 2. High-Speed Event Bus Broker
+  redis_bus:
+    image: redis:7-alpine
+    container_name: engine_redis_bus
+    ports:
+      - "${HOST_PORT_REDIS}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - agent_engine_network
+
+  # 3. Node.js Ingress API Gateway
+  api_gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: engine_api_gateway
+    ports:
+      - "${HOST_PORT_GATEWAY}:3000"
+    environment:
+      - PORT=3000
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?sslmode=disable
+      - REDIS_URL=redis://redis_bus:6379/0
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      redis_bus:
+        condition: service_healthy
+    restart: always
+    networks:
+      - agent_engine_network
+
+  # 4. Go State Machine Orchestrator
+  go_orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    container_name: engine_go_orchestrator
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?sslmode=disable
+      - REDIS_URL=redis://redis_bus:6379/0
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      redis_bus:
+        condition: service_healthy
+    restart: always
+    networks:
+      - agent_engine_network
+
+  # 5. Python Cognitive Agent Worker
+  agent_worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    container_name: engine_agent_worker
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?sslmode=disable
+      - REDIS_URL=redis://redis_bus:6379/0
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      redis_bus:
+        condition: service_healthy
+    restart: always
+    networks:
+      - agent_engine_network
+
+volumes:
+  postgres_data:
+
+networks:
+  agent_engine_network:
+    driver: bridge

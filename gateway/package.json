@@ -1,0 +1,13 @@
+{
+  "name": "engine-gateway",
+  "version": "1.0.0",
+  "description": "API Gateway & Trigger Router for the Agent-Native Engine",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "private": true,
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.11.5",
+    "redis": "^4.6.13"
+  }
+}
