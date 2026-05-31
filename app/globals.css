@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-panel: #0c0c0e;
+  --color-bg-canvas: #040405;
+  --color-border-micro: rgba(39, 39, 42, 0.5); /* zinc-800/50 */
+}
+
+:root {
+  background-color: #040405;
+  color: #f4f4f5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Custom minimal scrollbar for telemetry logs */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 2px;
+}

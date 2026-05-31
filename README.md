@@ -1,3 +1,20 @@
+
+## ⚡ Quick Start (5-Minute Local Setup)
+
+Get the complete multi-service agentic engine running locally with a single command. 
+
+### 1. Spin up the Stack
+Ensure you have [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
+
+```bash
+# Clone the repository
+git clone [https://github.com/your-username/agent-native-engine.git](https://github.com/your-username/agent-native-engine.git)
+cd agent-native-engine
+
+# Start all services (Database, Redis, Go Core, Node Gateway, Python Workers)
+docker-compose up --build -d
+
+
 # Agent Native Asynchronous Orchestration Engine
 
 A highly resilient, event-driven microservices architecture built to ingest, track, and execute cognitive agent workflows asynchronously.

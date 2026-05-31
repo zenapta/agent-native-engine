@@ -1,0 +1,11 @@
+{
+  "id": "node-state-schema",
+  "type": "object",
+  "properties": {
+    "instance_id": { "type": "string", "format": "uuid" },
+    "node_id": { "type": "string" },
+    "status": { "enum": ["pending", "processing", "completed", "awaiting_human"] },
+    "payload": { "type": "object" }
+  },
+  "required": ["instance_id", "node_id", "status"]
+}

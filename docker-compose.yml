@@ -1,101 +1,95 @@
-
-
 services:
-  # 1. Relational Storage Ledger
-  postgres_db:
+  # 1. Database Layer (PostgreSQL)
+  postgres:
     image: postgres:15-alpine
-    container_name: engine_postgres_db
+    container_name: agent-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: agent_engine
     ports:
-      - "${HOST_PORT_POSTGRES}:5432"
+      - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./postgres_init:/docker-entrypoint-initdb.d
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
-    networks:
-      - agent_engine_network
 
-  # 2. High-Speed Event Bus Broker
-  redis_bus:
+  # 2. Cache & Message Broker Layer (Redis)
+  redis:
     image: redis:7-alpine
-    container_name: engine_redis_bus
+    container_name: agent-redis
     ports:
-      - "${HOST_PORT_REDIS}:6379"
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 5
-    networks:
-      - agent_engine_network
 
-  # 3. Node.js Ingress API Gateway
-  api_gateway:
+  # 3. Core Go State Machine
+  orchestrator:
+    build: ./orchestrator
+    container_name: agent-orchestrator
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=password
+      - DB_NAME=agent_engine
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 4. Node API Gateway (Exposing Port 8080)
+  gateway:
     build:
       context: ./gateway
-      dockerfile: Dockerfile
-    container_name: engine_api_gateway
+    container_name: agent-gateway
     ports:
-      - "${HOST_PORT_GATEWAY}:3000"
+      - "8080:8080"
     environment:
-      - PORT=3000
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?sslmode=disable
-      - REDIS_URL=redis://redis_bus:6379/0
+      - ORCHESTRATOR_URL=http://orchestrator:50051
+      - REDIS_HOST=redis
+      - NODE_ENV=development
     depends_on:
-      postgres_db:
-        condition: service_healthy
-      redis_bus:
-        condition: service_healthy
-    restart: always
-    networks:
-      - agent_engine_network
+      - orchestrator
 
-  # 4. Go State Machine Orchestrator
-  go_orchestrator:
+  # 5. Next.js Frontend Dashboard (Exposing Port 3000)
+  agent-ui:
     build:
-      context: ./orchestrator
-      dockerfile: Dockerfile
-    container_name: engine_go_orchestrator
+      context: ./agent-ui
+    container_name: agent-ui-dashboard
+    ports:
+      - "3000:3000"
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?sslmode=disable
-      - REDIS_URL=redis://redis_bus:6379/0
+      - NEXT_PUBLIC_GATEWAY_URL=http://localhost:8080
+      - NODE_ENV=development
+    volumes:
+      - ./agent-ui:/app
+      - /app/node_modules
+      - /app/.next
     depends_on:
-      postgres_db:
-        condition: service_healthy
-      redis_bus:
-        condition: service_healthy
-    restart: always
-    networks:
-      - agent_engine_network
+      - gateway
 
-  # 5. Python Cognitive Agent Worker
-  agent_worker:
+  # 6. Python Async Workers
+  worker:
     build:
-      context: ./worker
-      dockerfile: Dockerfile
-    container_name: engine_agent_worker
+      context: ./workers
+    container_name: agent-worker
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres_db:5432/${POSTGRES_DB}?sslmode=disable
-      - REDIS_URL=redis://redis_bus:6379/0
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - DB_HOST=postgres
     depends_on:
-      postgres_db:
+      redis:
         condition: service_healthy
-      redis_bus:
-        condition: service_healthy
-    restart: always
-    networks:
-      - agent_engine_network
 
 volumes:
-  postgres_data:
-
-networks:
-  agent_engine_network:
-    driver: bridge
+  pgdata:
